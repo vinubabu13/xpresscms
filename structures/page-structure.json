@@ -1,0 +1,33 @@
+{
+  "name": "home",
+  "type": "single-page",
+  "fields": [
+    {
+      "type": "string",
+      "name": "title"
+    },
+    {
+      "type": "richtext",
+      "name": "description"
+    },
+    {
+      "type": "image",
+      "name": "icon",
+      "attributes": {
+        "single": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "component",
+      "name": "content",
+      "relation": "component_id"
+    },
+    {
+      "id": 5,
+      "type": "dynamiczone",
+      "name": "components",
+      "relation": "dynamic_zone_id"
+    }
+  ]
+}

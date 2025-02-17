@@ -1,0 +1,18 @@
+{
+  "name": "components",
+  "type": "dynamiczone",
+  "fields": [
+    {
+      "id": 3,
+      "type": "component",
+      "name": "content",
+      "relation": "component_id"
+    },
+    {
+      "id": 3,
+      "type": "component",
+      "name": "content",
+      "relation": "component_id"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "name": "Home",
+    "type": "single-page",
+    "relation": "page table"
+  },
+  {
+    "id": 2,
+    "name": "Blogs",
+    "type": "multi-page",
+    "relation": "page table"
+  }
+]
