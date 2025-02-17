@@ -278,6 +278,24 @@ async function getPageData(req, res) {
   // }
 }
 
+async function getPages(req, res) {
+  try {
+    const pages = await db("pages")
+      .select("type")
+      .select(
+        db.raw(
+          "JSON_AGG(JSON_BUILD_OBJECT('name', name, 'uuid', uuid)) AS pages"
+        )
+      )
+      .groupBy("type");
+
+    res.send({ data: pages });
+  } catch (error) {
+    console.log(error);
+    res.send(error);
+  }
+}
+
 module.exports = {
   createPage,
   addFieldsToPage,
@@ -285,4 +303,5 @@ module.exports = {
   addPageComponent,
   addDataToComponent,
   getPageData,
+  getPages,
 };

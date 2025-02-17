@@ -16,6 +16,12 @@ async function addFileField(req, res) {
       await trx.schema.createTable("files", (table) => {
         table.increments("id").primary();
         table.string("name").notNullable();
+        table
+          .integer("folder_id")
+          .unsigned()
+          .references("id")
+          .inTable("folders")
+          .onDelete("CASCADE");
         table.timestamp("created_at").defaultTo(trx.fn.now());
       });
     }
@@ -118,6 +124,7 @@ const performDbOperationsAndUpload = async (req, res, next) => {
     const fieldId = req?.body?.fieldId;
     const tableName = req?.body?.table;
     const type = req?.body?.type;
+    const folderId = req?.body?.folder_id;
     const file = req.file; // File details from multer
 
     // Step 1️⃣: Check if file exists in req.file
@@ -129,9 +136,9 @@ const performDbOperationsAndUpload = async (req, res, next) => {
     const [fileId] = await trx("files")
       .insert({
         name: file.filename, // Store the file with the original name
+        folder_id: folderId,
       })
       .returning("id");
-    console.log("fileId", fileId?.id);
 
     // Step 3️⃣: Fetch the field name from 'page_fields' table using the fieldId provided
     const pageField = await trx(`${tableName}_page_fields`)
@@ -154,7 +161,6 @@ const performDbOperationsAndUpload = async (req, res, next) => {
 
     // Commit the transaction if all operations were successful
     await trx.commit();
-
     // Step 6️⃣: Proceed to the next middleware (multer will handle the file storage)
     next();
   } catch (error) {
@@ -165,8 +171,49 @@ const performDbOperationsAndUpload = async (req, res, next) => {
   }
 };
 
+const createFolder = async (req, res) => {
+  const { name: folderName } = req.body;
+
+  if (!folderName) {
+    return res.status(400).send({ message: "Folder name is required." });
+  }
+
+  const trx = await db.transaction(); // Start a transaction
+
+  try {
+    // Step 1️⃣: Ensure the 'folders' table exists (Create if not exists)
+    await trx.schema.hasTable("folders").then(async (exists) => {
+      if (!exists) {
+        await trx.schema.createTable("folders", (table) => {
+          table.increments("id").primary();
+          table.string("name").unique().notNullable();
+          table.timestamp("created_at").defaultTo(trx.fn.now());
+        });
+      }
+    });
+
+    // Step 2️⃣: Insert the folder into the 'folders' table
+    const [folderId] = await trx("folders")
+      .insert({ name: folderName })
+      .returning("id");
+
+    // Step 3️⃣: Commit the transaction if successful
+    await trx.commit();
+
+    res.send({
+      message: "Folder created successfully!",
+      folderId: folderId.id,
+    });
+  } catch (error) {
+    await trx.rollback(); // Rollback transaction in case of an error
+    console.error("DB operation error:", error);
+    res.status(500).send({ message: "Database operation failed" });
+  }
+};
+
 module.exports = {
   addFileField,
   addFile,
   performDbOperationsAndUpload,
+  createFolder,
 };
