@@ -1,6 +1,7 @@
 // server.js
 const express = require("express");
 const apiRouter = require("./src/routes/api");
+const responseInterceptor = require("./src/utility/responseInterceptor");
 
 // Function to create and configure the Express app
 function createServer() {
@@ -8,6 +9,8 @@ function createServer() {
 
   // Middleware to parse JSON bodies
   app.use(express.json());
+
+  app.use(responseInterceptor);
 
   //comment when npm packing
   app.listen(3000, () => {

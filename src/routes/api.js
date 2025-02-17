@@ -14,6 +14,7 @@ const {
   addPageComponent,
   addDataToComponent,
   getPageData,
+  getPages,
 } = require("../core/pages");
 const db = require("../../database/connection");
 const { addRelation } = require("../core/relation");
@@ -21,6 +22,7 @@ const {
   addFileField,
   addFile,
   performDbOperationsAndUpload,
+  createFolder,
 } = require("../core/file");
 
 const router = express.Router();
@@ -99,6 +101,15 @@ router.get("/page/schema", async (req, res) => {
   });
 });
 
-router.post("/add-field", addFileField);
-router.post("/add/file", upload.single("file"), performDbOperationsAndUpload);
+router.post("/file/field", addFileField);
+router.post(
+  "/add/file",
+  upload.single("file"),
+  performDbOperationsAndUpload,
+  async (req, res) => {
+    res.status(200).send({ message: "File uploaded successfully!" });
+  }
+);
+router.post("/create/folder", createFolder);
+router.get("/pages/listing", getPages);
 module.exports = router;
