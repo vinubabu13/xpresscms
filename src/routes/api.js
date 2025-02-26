@@ -2,11 +2,15 @@
 const express = require("express");
 const fs = require("fs");
 const multer = require("multer");
-const { createComponent } = require("../core/create-components");
+const {
+  createComponent,
+  getComponents,
+  getComponentStructure,
+} = require("../core/component");
 const {
   createDynamicZone,
   addComponentsToDynamicZone,
-} = require("../core/create-dynamiczone");
+} = require("../core/dynamiczone");
 const {
   createPage,
   addFieldsToPage,
@@ -15,6 +19,8 @@ const {
   addDataToComponent,
   getPageData,
   getPages,
+  getSinglePages,
+  getCollectionTypes,
 } = require("../core/pages");
 const db = require("../../database/connection");
 const { addRelation } = require("../core/relation");
@@ -24,6 +30,8 @@ const {
   performDbOperationsAndUpload,
   createFolder,
 } = require("../core/file");
+const { createComponentRules } = require("../validators/component");
+const { createPageRules, addFieldsToPageRules } = require("../validators/page");
 
 const router = express.Router();
 
@@ -75,11 +83,11 @@ router.get("/greet/:name", (req, res) => {
   res.send(`Hello, ${name}!`);
 });
 
-router.post("/create/component", createComponent);
+router.post("/create/component", createComponentRules(), createComponent);
 router.post("/create/dynamiczone", createDynamicZone);
 router.post("/add/components/dynamiczone", addComponentsToDynamicZone);
-router.post("/create/page", createPage);
-router.post("/page/add/fields", addFieldsToPage);
+router.post("/create/page", createPageRules(), createPage);
+router.post("/page/add/fields", addFieldsToPageRules(), addFieldsToPage);
 router.post("/page/add/data", addPageData);
 router.post("/page/add/component", addPageComponent);
 router.post("/page/add/component/data", addDataToComponent);
@@ -91,7 +99,7 @@ router.get("/page/schema", async (req, res) => {
   const getPage = await db("pages").select("name").where("uuid", uid);
 
   //get page fields
-  const getPageFields = await db(`${getPage[0].name}_page_fields`).select(
+  const getPageFields = await db(`${getPage[0]?.name}_page_fields`).select(
     "name",
     "type"
   );
@@ -112,4 +120,8 @@ router.post(
 );
 router.post("/create/folder", createFolder);
 router.get("/pages/listing", getPages);
+router.get("/single/type", getSinglePages);
+router.get("/collection/type", getCollectionTypes);
+router.get("/components/list", getComponents);
+router.get("/component", getComponentStructure);
 module.exports = router;
