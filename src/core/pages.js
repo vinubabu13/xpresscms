@@ -1,98 +1,107 @@
 const db = require("../../database/connection");
-const { getPageUid, SINGLE_PAGE } = require("../utility/functions");
+const { getPageUid, SINGLE_PAGE, MULTI_PAGE } = require("../utility/functions");
 const _ = require("lodash");
 const queryBuilder = require("./queryBuilder");
+const { validationResult } = require("express-validator");
 
 async function createPage(req, res) {
-  const { name, type } = req.body;
-
-  // Convert the table name to snake_case
-  const formattedTableName = _.snakeCase(name);
-
-  // Example usage
-  const pageUid = await getPageUid(name);
-  //check whether a page table exists
-  const tableExists = await db.schema.hasTable("pages");
-
-  if (!tableExists) {
-    await db.schema.createTable("pages", (table) => {
-      table.increments("id").primary();
-      table.string("name").notNullable();
-      table.string("type").notNullable();
-      table.string("uuid").notNullable().unique();
-    });
-
-    await db("pages").insert({
-      name: formattedTableName,
-      type,
-      uuid: pageUid,
-    });
-  } else {
-    //insert the page details into the table
-    await db("pages").insert({
-      name: formattedTableName,
-      type,
-      uuid: pageUid,
-    });
+  // Validate request
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
 
-  //create a table with the page name with fields and type as columns
-  await db.schema.createTable(`${formattedTableName}_page_fields`, (table) => {
-    table.increments("id").primary();
-    table.string("name").notNullable();
-    table.string("type").notNullable();
-  });
+  // Extract and format data
+  const { name, type } = req.body;
+  const formattedTableName = _.snakeCase(name);
 
-  // //create a table with the page name with fields and type as columns
-  // await db.schema.createTable(
-  //   `${formattedTableName}_page_components`,
-  //   (table) => {
-  //     table.increments("id").primary();
-  //     table.string("name").notNullable();
-  //     table
-  //       .integer("component_id") // Foreign key column
-  //       .unsigned()
-  //       .references("id")
-  //       .inTable("components") // Reference to the components table
-  //       .notNullable();
-  //   }
-  // );
+  // Generate unique page identifier
+  const pageUid = await getPageUid(name);
 
-  // //create a table with the page name with fields and type as columns
-  // await db.schema.createTable(
-  //   `${formattedTableName}_page_dynamiczones`,
-  //   (table) => {
-  //     table.increments("id").primary();
-  //     table.string("name").notNullable();
-  //     table
-  //       .integer("dynamiczone_id") // Foreign key column
-  //       .unsigned()
-  //       .references("id")
-  //       .inTable("dynamiczones") // Reference to dynamiczones table
-  //       .onDelete("SET NULL") // If related dynamic zone is deleted, set this to NULL
-  //       .nullable();
-  //   }
-  // );
-  return res.send({ message: `${name} page created successfully !` });
+  try {
+    // Start a transaction
+    await db.transaction(async (trx) => {
+      // Check if 'pages' table exists
+      const tableExists = await trx.schema.hasTable("pages");
+
+      // Create 'pages' table if it doesn't exist
+      if (!tableExists) {
+        await trx.schema.createTable("pages", (table) => {
+          table.increments("id").primary();
+          table.string("name").notNullable();
+          table.string("type").notNullable();
+          table.string("uuid").notNullable().unique();
+        });
+      }
+
+      // Insert page details into 'pages' table
+      await trx("pages").insert({
+        name: formattedTableName,
+        type,
+        uuid: pageUid,
+      });
+
+      // Create a table for page fields
+      await trx.schema.createTable(
+        `${formattedTableName}_page_fields`,
+        (table) => {
+          table.increments("id").primary();
+          table.string("name").notNullable();
+          table.string("type").notNullable();
+        }
+      );
+
+      // Additional table creations can be added here
+    });
+
+    // Send success response
+    return res.send({
+      message: `${name} page created successfully!`,
+      data: { name, uuid: pageUid },
+    });
+  } catch (error) {
+    // Handle errors and send error response
+    console.error("Error creating page:", error);
+    return res
+      .status(500)
+      .json({ error: "An error occurred while creating the page." });
+  }
 }
 
 async function addFieldsToPage(req, res) {
-  const { pageUid, fields } = req.body;
+  try {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    const { pageUid, fields } = req.body;
 
-  //using pageUid find name from the pages table
-  const pageName = await db("pages").select("name").where("uuid", pageUid);
+    // Using pageUid to find name from the pages table
+    const page = await db("pages")
+      .select("name")
+      .where("uuid", pageUid)
+      .first();
 
-  //change the name to snake_case
-  const formattedTableName = _.snakeCase(pageName[0].name);
+    // Convert the name to snake_case
+    const formattedTableName = _.snakeCase(page.name);
 
-  //insert the page details into the table
-  await db(`${formattedTableName}_page_fields`).insert(fields);
+    // Insert the page details into the table
+    await db(`${formattedTableName}_page_fields`).insert(fields);
 
-  await addPageDataTable({ pageUid, data: fields });
+    // Call function to add data
+    await addPageDataTable({ pageUid, data: fields });
 
-  res.send({ message: "Fields added successfully !" });
+    res.send({ message: "Fields added successfully!" });
+  } catch (error) {
+    console.error("Error adding fields to page:", error);
+    res.status(500).send({
+      message: "An error occurred while adding fields",
+      error: error.message,
+    });
+  }
 }
-
 async function addPageDataTable(params) {
   const { pageUid } = params;
 
@@ -287,7 +296,34 @@ async function getPages(req, res) {
           "JSON_AGG(JSON_BUILD_OBJECT('name', name, 'uuid', uuid)) AS pages"
         )
       )
+      .where("type", "SINGLE_TYPE")
       .groupBy("type");
+
+    res.send({ data: pages });
+  } catch (error) {
+    console.log(error);
+    res.send(error);
+  }
+}
+
+async function getSinglePages(req, res) {
+  try {
+    const pages = await db("pages")
+      .select(["name", "uuid"])
+      .where("type", SINGLE_PAGE);
+
+    res.send({ data: pages });
+  } catch (error) {
+    console.log(error);
+    res.send(error);
+  }
+}
+
+async function getCollectionTypes(req, res) {
+  try {
+    const pages = await db("pages")
+      .select(["name", "uuid"])
+      .where("type", MULTI_PAGE);
 
     res.send({ data: pages });
   } catch (error) {
@@ -304,4 +340,6 @@ module.exports = {
   addDataToComponent,
   getPageData,
   getPages,
+  getSinglePages,
+  getCollectionTypes,
 };
